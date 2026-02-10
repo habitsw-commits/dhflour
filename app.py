@@ -3,7 +3,12 @@ import pandas as pd
 from io import StringIO
 
 st.set_page_config(layout="wide")
-st.title("🏭 대한제분 일일재고현황표")
+
+# 제목 스타일링 (가운데 정렬 + 밑줄)
+st.markdown("""
+    <h1 style='text-align: center; text-decoration: underline; text-underline-offset: 10px;'>일 일 재 고 현 황 표</h1>
+    <br>
+""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
 # 1. 입력창 (엑셀 복사 붙여넣기)
@@ -13,120 +18,163 @@ with st.expander("데이터 입력 열기/닫기", expanded=True):
     input_data = st.text_area(
         "붙여넣기 칸", 
         height=150,
-        placeholder="예시:\nA101\tWASW\t1,508\nA102\tWCRS\t1,671"
+        placeholder="예시:\nA101\tWASW\t1508\nA102\tWCRS\t1671"
     )
 
 # ---------------------------------------------------------
-# 2. 데이터 처리 (지능형 파싱)
+# 2. 데이터 처리 및 설정
 # ---------------------------------------------------------
-inventory_map = {}  # 데이터를 저장할지도
+inventory_map = {} 
 
 if input_data:
     try:
-        # 엑셀 데이터(탭으로 구분됨)를 읽어서 표로 만듦
         df = pd.read_csv(StringIO(input_data), sep='\t', header=None, names=['ID', 'Name', 'Qty'])
         
-        # 데이터를 딕셔너리로 변환 (예: 'A101'을 찾으면 내용이 나오게)
         for index, row in df.iterrows():
-            clean_id = str(row['ID']).strip().upper() # ID 정리 (공백제거)
+            clean_id = str(row['ID']).strip().upper()
+            
+            # 소수점 제거 로직 (예: 1600.0 -> 1600 -> "1,600")
+            try:
+                raw_qty = str(row['Qty']).replace(',', '') # 쉼표 제거
+                qty_num = int(float(raw_qty)) # 실수로 변환 후 정수로 자름
+                qty_str = "{:,}".format(qty_num) # 다시 쉼표 추가
+            except:
+                qty_str = str(row['Qty']) # 에러나면 그대로 표시
+
             inventory_map[clean_id] = {
-                'name': str(row['Name']),
-                'qty': str(row['Qty'])
+                'name': str(row['Name']).strip(),
+                'qty': qty_str
             }
-        st.success(f"총 {len(inventory_map)}개의 데이터를 인식했습니다.")
         
     except Exception as e:
-        st.error("데이터 형식이 맞지 않습니다. 엑셀에서 3개 열(ID, 이름, 수량)만 정확히 복사했는지 확인해주세요.")
+        st.error("데이터 형식이 맞지 않습니다. 엑셀 데이터를 정확히 복사해주세요.")
 
 # ---------------------------------------------------------
-# 3. 그림 그리기 (HTML/CSS)
+# 3. 그림 그리기 (HTML/CSS) - 디자인 수정 완료
 # ---------------------------------------------------------
 def get_card_html(id_code, top_px, left_px):
-    # 데이터가 있으면 가져오고, 없으면 빈칸
-    item = inventory_map.get(id_code, {'name': '-', 'qty': '-'})
+    # 데이터 가져오기
+    item = inventory_map.get(id_code, {'name': '', 'qty': ''})
     name = item['name']
     qty = item['qty']
     
-    # 색상 로직 (정답 사진 참고: WASW는 파랑, WCRS는 주황, 나머지는 갈색)
-    color = "#0000FF" if "WASW" in name else "#D2691E" if "WCRS" in name else "#8B4513"
-    if name == '-': color = "#ccc"
-    
-    # 짝수 줄(A2, A4...)은 네모(Text), 홀수 줄(A1, A3...)은 동그라미(Circle)
+    # 1. 색상 로직 (정답지와 동일하게 맞춤)
+    # 파란색 계열: WASW, WUSH, WASWP, WUSL 등 'W'로 시작하고 'S'가 들어가는 패턴이 많음
+    # 갈색/주황 계열: WCRS, WNS, WUR, WAH
+    if name in ['WASW', 'WUSH', 'WASWP', 'WUSL9.0', 'WUSL', 'WASW']:
+        color = "#0000FF" # 파란색
+    elif name == '' or name == '-':
+         color = "transparent"
+    else:
+        color = "#D35400" # 진한 주황/갈색 (WCRS, WNS, WUR 등)
+        
+    # 수량이 0이면 빨간색 표시 (옵션)
+    qty_color = "black"
+    if qty == '0':
+        qty_color = "red"
+        
+    # 2. 모양 결정 (짝수줄 네모 / 홀수줄 동그라미)
     is_circle = True
     if id_code.startswith("A2") or id_code.startswith("A4"):
         is_circle = False
         
-    # 스타일 결정
-    shape_style = "border-radius: 50%; width: 75px; height: 75px; border: 1.5px solid black;" if is_circle else "width: 75px; height: 50px; border: none; background: transparent;"
-    
+    # 3. 스타일 적용
+    if is_circle:
+        # 동그라미 스타일
+        container_style = """
+            border-radius: 50%; width: 90px; height: 90px; 
+            border: 1.5px solid black; background-color: white;
+            z-index: 10;
+        """
+        name_size = "14px"
+        qty_size = "15px"
+        id_color = "#ccc" # 연한 회색 (위치 코드)
+    else:
+        # 네모(텍스트) 스타일 - 배경 투명, 테두리 없음
+        container_style = """
+            width: 90px; height: 60px; 
+            border: none; background: transparent;
+            z-index: 10;
+        """
+        name_size = "14px"
+        qty_size = "15px"
+        id_color = "#ccc"
+
     return f"""
     <div style="position: absolute; top: {top_px}px; left: {left_px}px; 
-                {shape_style} background-color: white;
+                {container_style}
                 display: flex; flex-direction: column; align-items: center; justify-content: center;
-                font-size: 12px; font-weight: bold; z-index: 10;">
-        <div style="color: {color}; margin-bottom: 2px;">{name}</div>
-        <div style="color: black; font-size: 13px;">{qty}</div>
-        <div style="color: #999; font-size: 10px; margin-top: 2px;">{id_code}</div>
+                font-weight: bold;">
+        <div style="color: {color}; font-size: {name_size}; margin-bottom: 2px;">{name}</div>
+        <div style="color: {qty_color}; font-size: {qty_size};">{qty}</div>
+        <div style="color: {id_color}; font-size: 10px; margin-top: 2px;">{id_code}</div>
     </div>
     """
 
-# 배경 그리드와 전체 HTML 조립
+# 전체 배경 및 그리드 그리기 (오른쪽 잘림 수정)
+# 가로폭을 800px -> 860px로 늘려서 오른쪽 여백 확보
 html_content = """
-<div style="position: relative; width: 800px; height: 550px; background-color: white; margin: 20px;">
-    <div style="position: absolute; top: 40px; left: 50px; width: 700px; height: 400px; border: 2px solid black; z-index: 0;"></div>
-    <div style="position: absolute; top: 240px; left: 50px; width: 700px; height: 0px; border-top: 1px solid black; z-index: 0;"></div>
-    <div style="position: absolute; top: 40px; left: 166px; width: 0px; height: 400px; border-left: 1px solid black; z-index: 0;"></div>
-    <div style="position: absolute; top: 40px; left: 282px; width: 0px; height: 400px; border-left: 1px solid black; z-index: 0;"></div>
-    <div style="position: absolute; top: 40px; left: 398px; width: 0px; height: 400px; border-left: 1px solid black; z-index: 0;"></div>
-    <div style="position: absolute; top: 40px; left: 514px; width: 0px; height: 400px; border-left: 1px solid black; z-index: 0;"></div>
-    <div style="position: absolute; top: 40px; left: 630px; width: 0px; height: 400px; border-left: 1px solid black; z-index: 0;"></div>
+<div style="position: relative; width: 860px; height: 600px; background-color: white; margin: 0 auto;">
+    
+    <div style="position: absolute; top: 65px; left: 45px; width: 770px; height: 380px; border: 2px solid black; z-index: 0;"></div>
+    
+    <div style="position: absolute; top: 255px; left: 45px; width: 770px; height: 0px; border-top: 1px solid black; z-index: 0;"></div>
+    
+    <div style="position: absolute; top: 65px; left: 155px; width: 0px; height: 380px; border-left: 1px solid black; z-index: 0;"></div>
+    <div style="position: absolute; top: 65px; left: 265px; width: 0px; height: 380px; border-left: 1px solid black; z-index: 0;"></div>
+    <div style="position: absolute; top: 65px; left: 375px; width: 0px; height: 380px; border-left: 1px solid black; z-index: 0;"></div>
+    <div style="position: absolute; top: 65px; left: 485px; width: 0px; height: 380px; border-left: 1px solid black; z-index: 0;"></div>
+    <div style="position: absolute; top: 65px; left: 595px; width: 0px; height: 380px; border-left: 1px solid black; z-index: 0;"></div>
+    <div style="position: absolute; top: 65px; left: 705px; width: 0px; height: 380px; border-left: 1px solid black; z-index: 0;"></div>
 """
 
-# 위치 좌표 설정 (수동 매핑으로 정확도 100% 보장)
+# 좌표값 미세 조정 (간격 110px 기준)
+# 원의 크기가 90px이므로, 선(Line) 위치에서 -45px 해줘야 중앙 정렬됨
+# 첫번째 선: 45px(시작점) + 55px(절반) = 100px 중심
+
 # Row 1 (A101~A106) - Circle
-html_content += get_card_html("A101", 0, 130)
-html_content += get_card_html("A102", 0, 245)
-html_content += get_card_html("A103", 0, 360)
-html_content += get_card_html("A104", 0, 475)
-html_content += get_card_html("A105", 0, 590)
-html_content += get_card_html("A106", 0, 705)
+html_content += get_card_html("A101", 20, 110)
+html_content += get_card_html("A102", 20, 220)
+html_content += get_card_html("A103", 20, 330)
+html_content += get_card_html("A104", 20, 440)
+html_content += get_card_html("A105", 20, 550)
+html_content += get_card_html("A106", 20, 660)
+html_content += get_card_html("A107", 20, 770) # 혹시 몰라 추가했으나 데이터 없으면 안보임
 
-# Row 2 (A201~A207) - Text Block (중간 위치)
-html_content += get_card_html("A201", 100, 70)  # 사이사이 배치
-html_content += get_card_html("A202", 100, 185)
-html_content += get_card_html("A203", 100, 300)
-html_content += get_card_html("A204", 100, 415)
-html_content += get_card_html("A205", 100, 530)
-html_content += get_card_html("A206", 100, 645)
-html_content += get_card_html("A207", 100, 750)
+# Row 2 (A201~A207) - Text Block
+html_content += get_card_html("A201", 130, 55)
+html_content += get_card_html("A202", 130, 165)
+html_content += get_card_html("A203", 130, 275)
+html_content += get_card_html("A204", 130, 385)
+html_content += get_card_html("A205", 130, 495)
+html_content += get_card_html("A206", 130, 605)
+html_content += get_card_html("A207", 130, 715)
 
-# Row 3 (A301~A306) - Circle
-html_content += get_card_html("A301", 200, 130)
-html_content += get_card_html("A302", 200, 245)
-html_content += get_card_html("A303", 200, 360)
-html_content += get_card_html("A304", 200, 475)
-html_content += get_card_html("A305", 200, 590)
-html_content += get_card_html("A306", 200, 705)
+# Row 3 (A301~A306) - Circle (중앙선)
+html_content += get_card_html("A301", 210, 110)
+html_content += get_card_html("A302", 210, 220)
+html_content += get_card_html("A303", 210, 330)
+html_content += get_card_html("A304", 210, 440)
+html_content += get_card_html("A305", 210, 550)
+html_content += get_card_html("A306", 210, 660)
 
 # Row 4 (A401~A407) - Text Block
-html_content += get_card_html("A401", 300, 70)
-html_content += get_card_html("A402", 300, 185)
-html_content += get_card_html("A403", 300, 300)
-html_content += get_card_html("A404", 300, 415)
-html_content += get_card_html("A405", 300, 530)
-html_content += get_card_html("A406", 300, 645)
-html_content += get_card_html("A407", 300, 750)
+html_content += get_card_html("A401", 320, 55)
+html_content += get_card_html("A402", 320, 165)
+html_content += get_card_html("A403", 320, 275)
+html_content += get_card_html("A404", 320, 385)
+html_content += get_card_html("A405", 320, 495)
+html_content += get_card_html("A406", 320, 605)
+html_content += get_card_html("A407", 320, 715)
 
 # Row 5 (A501~A506) - Circle (바닥)
-html_content += get_card_html("A501", 400, 130)
-html_content += get_card_html("A502", 400, 245)
-html_content += get_card_html("A503", 400, 360)
-html_content += get_card_html("A504", 400, 475)
-html_content += get_card_html("A505", 400, 590)
-html_content += get_card_html("A506", 400, 705)
+html_content += get_card_html("A501", 400, 110)
+html_content += get_card_html("A502", 400, 220)
+html_content += get_card_html("A503", 400, 330)
+html_content += get_card_html("A504", 400, 440)
+html_content += get_card_html("A505", 400, 550)
+html_content += get_card_html("A506", 400, 660)
 
 html_content += "</div>"
 
-# 최종 출력
-st.write("### ▼ 재고 현황판 (자동 생성됨)")
 st.components.v1.html(html_content, height=600)
