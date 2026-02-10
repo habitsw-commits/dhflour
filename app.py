@@ -4,7 +4,7 @@ from io import StringIO
 
 st.set_page_config(layout="wide")
 
-# 제목 스타일링 (가운데 정렬 + 밑줄)
+# 제목 스타일링
 st.markdown("""
     <h1 style='text-align: center; text-decoration: underline; text-underline-offset: 10px;'>일 일 재 고 현 황 표</h1>
     <br>
@@ -22,7 +22,7 @@ with st.expander("데이터 입력 열기/닫기", expanded=True):
     )
 
 # ---------------------------------------------------------
-# 2. 데이터 처리 및 설정
+# 2. 데이터 처리 (소수점 제거 및 파싱)
 # ---------------------------------------------------------
 inventory_map = {} 
 
@@ -33,13 +33,16 @@ if input_data:
         for index, row in df.iterrows():
             clean_id = str(row['ID']).strip().upper()
             
-            # 소수점 제거 로직 (예: 1600.0 -> 1600 -> "1,600")
+            # 소수점 제거 로직
             try:
                 raw_qty = str(row['Qty']).replace(',', '') # 쉼표 제거
-                qty_num = int(float(raw_qty)) # 실수로 변환 후 정수로 자름
-                qty_str = "{:,}".format(qty_num) # 다시 쉼표 추가
+                if raw_qty.replace('.','',1).isdigit(): # 숫자인지 확인
+                    qty_num = int(float(raw_qty)) # 실수 변환 후 정수로 자름
+                    qty_str = "{:,}".format(qty_num) # 쉼표 추가
+                else:
+                    qty_str = str(row['Qty'])
             except:
-                qty_str = str(row['Qty']) # 에러나면 그대로 표시
+                qty_str = str(row['Qty'])
 
             inventory_map[clean_id] = {
                 'name': str(row['Name']).strip(),
@@ -50,37 +53,33 @@ if input_data:
         st.error("데이터 형식이 맞지 않습니다. 엑셀 데이터를 정확히 복사해주세요.")
 
 # ---------------------------------------------------------
-# 3. 그림 그리기 (HTML/CSS) - 디자인 수정 완료
+# 3. 그림 그리기 (HTML/CSS)
 # ---------------------------------------------------------
 def get_card_html(id_code, top_px, left_px):
-    # 데이터 가져오기
     item = inventory_map.get(id_code, {'name': '', 'qty': ''})
     name = item['name']
     qty = item['qty']
     
-    # 1. 색상 로직 (정답지와 동일하게 맞춤)
-    # 파란색 계열: WASW, WUSH, WASWP, WUSL 등 'W'로 시작하고 'S'가 들어가는 패턴이 많음
-    # 갈색/주황 계열: WCRS, WNS, WUR, WAH
+    # 색상 로직
     if name in ['WASW', 'WUSH', 'WASWP', 'WUSL9.0', 'WUSL', 'WASW']:
         color = "#0000FF" # 파란색
     elif name == '' or name == '-':
          color = "transparent"
     else:
-        color = "#D35400" # 진한 주황/갈색 (WCRS, WNS, WUR 등)
+        color = "#D35400" # 진한 주황/갈색
         
-    # 수량이 0이면 빨간색 표시 (옵션)
+    # 수량 0일 때 빨간색
     qty_color = "black"
     if qty == '0':
         qty_color = "red"
         
-    # 2. 모양 결정 (짝수줄 네모 / 홀수줄 동그라미)
+    # 모양 결정 (짝수줄 네모 / 홀수줄 동그라미)
     is_circle = True
     if id_code.startswith("A2") or id_code.startswith("A4"):
         is_circle = False
         
-    # 3. 스타일 적용
+    # 스타일 적용
     if is_circle:
-        # 동그라미 스타일
         container_style = """
             border-radius: 50%; width: 90px; height: 90px; 
             border: 1.5px solid black; background-color: white;
@@ -88,9 +87,8 @@ def get_card_html(id_code, top_px, left_px):
         """
         name_size = "14px"
         qty_size = "15px"
-        id_color = "#ccc" # 연한 회색 (위치 코드)
+        id_color = "#ccc"
     else:
-        # 네모(텍스트) 스타일 - 배경 투명, 테두리 없음
         container_style = """
             width: 90px; height: 60px; 
             border: none; background: transparent;
@@ -111,8 +109,7 @@ def get_card_html(id_code, top_px, left_px):
     </div>
     """
 
-# 전체 배경 및 그리드 그리기 (오른쪽 잘림 수정)
-# 가로폭을 800px -> 860px로 늘려서 오른쪽 여백 확보
+# 전체 레이아웃 (오른쪽 잘림 해결 + A107 삭제)
 html_content = """
 <div style="position: relative; width: 860px; height: 600px; background-color: white; margin: 0 auto;">
     
@@ -128,18 +125,14 @@ html_content = """
     <div style="position: absolute; top: 65px; left: 705px; width: 0px; height: 380px; border-left: 1px solid black; z-index: 0;"></div>
 """
 
-# 좌표값 미세 조정 (간격 110px 기준)
-# 원의 크기가 90px이므로, 선(Line) 위치에서 -45px 해줘야 중앙 정렬됨
-# 첫번째 선: 45px(시작점) + 55px(절반) = 100px 중심
-
-# Row 1 (A101~A106) - Circle
+# 좌표값 매핑
+# Row 1 (A101~A106) - Circle (A107 삭제됨)
 html_content += get_card_html("A101", 20, 110)
 html_content += get_card_html("A102", 20, 220)
 html_content += get_card_html("A103", 20, 330)
 html_content += get_card_html("A104", 20, 440)
 html_content += get_card_html("A105", 20, 550)
 html_content += get_card_html("A106", 20, 660)
-html_content += get_card_html("A107", 20, 770) # 혹시 몰라 추가했으나 데이터 없으면 안보임
 
 # Row 2 (A201~A207) - Text Block
 html_content += get_card_html("A201", 130, 55)
@@ -150,7 +143,7 @@ html_content += get_card_html("A205", 130, 495)
 html_content += get_card_html("A206", 130, 605)
 html_content += get_card_html("A207", 130, 715)
 
-# Row 3 (A301~A306) - Circle (중앙선)
+# Row 3 (A301~A306) - Circle
 html_content += get_card_html("A301", 210, 110)
 html_content += get_card_html("A302", 210, 220)
 html_content += get_card_html("A303", 210, 330)
@@ -167,7 +160,7 @@ html_content += get_card_html("A405", 320, 495)
 html_content += get_card_html("A406", 320, 605)
 html_content += get_card_html("A407", 320, 715)
 
-# Row 5 (A501~A506) - Circle (바닥)
+# Row 5 (A501~A506) - Circle
 html_content += get_card_html("A501", 400, 110)
 html_content += get_card_html("A502", 400, 220)
 html_content += get_card_html("A503", 400, 330)
